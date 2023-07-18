@@ -36,13 +36,12 @@ main(int argc, char* argv[]) {
             fprintf(2, "parent write error\n");
             exit(1);
         }
-        wait(0);
         n = read(p2[0], recv, 1);
         if (n < 0) {
             fprintf(2, "parent read error\n");
             exit(1);
         }
-        printf("%d: recvived pong\n", getpid());
+        printf("%d: received pong\n", getpid());
     }
     exit(0);
 }
