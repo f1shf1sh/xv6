@@ -7,7 +7,9 @@ void
 find(char* path, char* filename) {
     int fd;
     char *p;
+    char *tmp_p;
     char buf[512];
+    char tmp_buf[512];
     struct stat st;
     struct dirent de;
     
@@ -26,11 +28,8 @@ find(char* path, char* filename) {
     // don't use return use in switch case , use break and jug
     switch(st.type) {
         case T_FILE:
-            if (read(fd, &de, sizeof(de)) == sizeof(de)) {
-                if (!strcmp(filename, de.name)) {
-                    printf("%s\n", filename);
-                    break;
-                }
+            if (strcmp(filename, de.name)) {
+                printf("%s\n", filename);
             }
             break;
         case T_DIR:
@@ -43,24 +42,40 @@ find(char* path, char* filename) {
             p = buf + strlen(path);
             *p++ = '/';
             while (read(fd, &de, sizeof(de)) == sizeof(de)) {
+                
                 if (de.inum == 0) {
+                    continue;
+                } 
+                // printf("de.name: %s\n", de.name);
+                if (!strcmp(de.name, "." )) {
+                    // printf(". done\n");
+                    continue;
+                } else if (!strcmp(de.name, "..") ) {
+                    // printf(".. done\n");
                     continue;
                 }
                 // memmove(p, de.name, DIRSIZ);
                 // p[DIRSIZ] = 0;
-                if (stat(buf, &st) < 0) {
+                // memcpy(p++, de.name, strlen(de.name));
+                // printf("after memcpy, buf:%s\n", buf);
+                memset(tmp_buf, 0, strlen(tmp_buf));
+                memcpy(tmp_buf, buf, strlen(buf));
+                tmp_p = tmp_buf + strlen(tmp_buf);
+                memcpy(tmp_p, de.name, strlen(de.name));
+                // printf("after memcpy, tmp_buf:%s\n", tmp_buf);
+                if (stat(tmp_buf, &st) < 0) {
                     fprintf(2, "find: can't stat file\n");
                     continue;
                 }
 
                 if (st.type == T_DIR) {
                     // recurse 
-                    find(buf, filename);
+                    find(tmp_buf, filename);
                 } else {
                     // cmp filename
-                    if ( !strcmp(filename, de.name)) {
+                    if (!strcmp(filename, de.name)) {
                         // file has been find
-                        printf("%s", buf);
+                        printf("%s\n", tmp_buf);
                     }
                 }
             }
