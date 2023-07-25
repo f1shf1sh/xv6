@@ -43,11 +43,12 @@ int
 main(int argc, char* argv[]) {
 
     int i;
-    int j;
+    // int j;
     int pid;
     int arrlen;
     char argv_buf[MAXARG];
     char *argv_arr[MAXARG];
+
     // char whitespace[] = " \t\r\n\v";
     if (argc < 2) {
         printf("usage: xargs <parm>\n");
@@ -63,7 +64,19 @@ main(int argc, char* argv[]) {
 
     // printf("arg:%s\n", argv_buf);
     // parse argv_buf
+
     arrlen = split(argv_arr, argv_buf, '\n');
+    // printf("arrlen:%d\n", arrlen);
+    for ( i = 0; i < argc; i++) {
+        argv[i] = argv[i+1];
+    }
+
+    argc--;
+
+    //argv debug
+    // for ( i = 0; i < argc; i++) {
+    //     printf("xargs argv[%d]:%s\n", i, argv[i]);
+    // }
 
     //check it
     // printf("arrlen:%d\n", arrlen);
@@ -71,20 +84,21 @@ main(int argc, char* argv[]) {
     //     printf("%s\n", argv_arr[i]);
     // }
 
-    for ( i = argc, j = 0; j < arrlen; i++, j++) {
-        argv[i] = argv_arr[j];
-        argc++;
+    for ( i = 0; i < arrlen; i++) {
+        pid = fork();
+        if (pid == 0) {
+            argv[argc] = argv_arr[i];
+            argv[argc+1] = 0;
+            exec(argv[0], argv);
+            exit(0);
+        }   else {
+            wait(0);
+        }
+
     }
 
-    for ( i = 0; i < argc; i++) {
-        printf("xargs argv[%d]:%s\n", i, argv[i]);
-    }
-
-
-    pid = fork();
-    if (pid == 0) {
-        exec(argv[1], argv);
-        exit(0);
-    } 
+    // for ( i = 0; i < argc; i++) {
+    //     // printf("xargs argv[%d]:%s\n", i, argv[i]);
+    // }
     exit(0);
 }
