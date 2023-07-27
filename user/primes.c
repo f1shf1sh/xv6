@@ -10,7 +10,7 @@ Fork(int read_fd) {
 
     int p[2];
     pipe(p);
-    printf("pid:%d, p[0]:%d, p[1]:%d, read_fd:%d\n",getpid(), p[0], p[1], read_fd);
+    // printf("pid:%d, p[0]:%d, p[1]:%d, read_fd:%d\n",getpid(), p[0], p[1], read_fd);
     
     int divisor;
     int num, n;
@@ -31,15 +31,16 @@ Fork(int read_fd) {
             fprintf(2, "pid: %d <read error>\n", getpid());
             exit(1);
         }
-        // printf("primes %d\n", num);
-        divisor = num;
+        printf("primes %d\n", num);
         // printf("Fork read %d from read_fd:%d success\n", num, read_fd);
         if (n == 0) {
             // close(read_fd);
             // printf("primes %d\n", num);
+            // printf("pid%d exit success\n", getpid());  
             exit(0);
         }
 
+        divisor = num;
         // printf("pid %d get the prime %d to use divisor\n", getpid(), divisor);
         // printf("Fork: func read return %d\n", n);
         while ( n != 0) {
@@ -61,7 +62,9 @@ Fork(int read_fd) {
                 }
             }
         }
-        
+        // close(read_fd);
+        // printf("pid:%d close read_fd:%d success\n", getpid(), read_fd);
+        wait(0);
     } else {
         // close(read_fd);
         close(p[1]);
@@ -76,8 +79,7 @@ Fork(int read_fd) {
     //debug
     
     // printf("Fork: pid %d exit\n", getpid());
-    wait(0);
-    close(read_fd);
+    
     exit(0);
 }
 
@@ -120,7 +122,6 @@ main() {
         exit(0);
     }
     close(p[1]);
-
     //debug
     // printf("main pid %d exit\n", getpid());
     exit(0);

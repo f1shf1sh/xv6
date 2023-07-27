@@ -369,7 +369,7 @@ parsepipe(char **ps, char *es)
     cmd = pipecmd(cmd, parsepipe(ps, es));
   }
   return cmd;
-}
+} 
 
 struct cmd*
 parseredirs(struct cmd *cmd, char **ps, char *es)

@@ -6,7 +6,7 @@
 char*
 fmtname(char *path)
 {
-  static char buf[DIRSIZ+1];
+  static char buf[DIRSIZ+1];//DIRSIZ+1=15
   char *p;
 
   // Find first character after last slash.
@@ -19,6 +19,8 @@ fmtname(char *path)
     return p;
   memmove(buf, p, strlen(p));
   memset(buf+strlen(p), ' ', DIRSIZ-strlen(p));
+
+  // cat't use malloc, so use static char array instead malloc
   return buf;
 }
 
@@ -35,6 +37,7 @@ ls(char *path)
     return;
   }
 
+  // get file type
   if(fstat(fd, &st) < 0){
     fprintf(2, "ls: cannot stat %s\n", path);
     close(fd);
@@ -55,9 +58,9 @@ ls(char *path)
     p = buf+strlen(buf);
     *p++ = '/';
     while(read(fd, &de, sizeof(de)) == sizeof(de)){
-      if(de.inum == 0)
+      if(de.inum == 0) // igorne empty dir
         continue;
-      memmove(p, de.name, DIRSIZ);
+      memmove(p, de.name, DIRSIZ); // str conn
       p[DIRSIZ] = 0;
       if(stat(buf, &st) < 0){
         printf("ls: cannot stat %s\n", buf);
