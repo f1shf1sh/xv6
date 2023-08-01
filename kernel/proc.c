@@ -273,6 +273,9 @@ fork(void)
     release(&np->lock);
     return -1;
   }
+  //copy trace mask
+  np->mask = p->mask;
+
   np->sz = p->sz;
 
   np->parent = p;
@@ -692,4 +695,15 @@ procdump(void)
     printf("%d %s %s", p->pid, state, p->name);
     printf("\n");
   }
+}
+
+//syscall in kernel (syscall lab)
+int
+trace(int mask) 
+{
+  struct proc *p = myproc();
+  acquire(&p->lock);
+  p->mask = mask;
+  release(&p->lock);
+  return 0;
 }

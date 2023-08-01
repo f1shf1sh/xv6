@@ -134,19 +134,30 @@ static uint64 (*syscalls[])(void) = {
 void
 syscall(void)
 {
+  const char *sysfunc_name[] = {"fork", "exit", "wait", "pipe", \
+                               "read", "kill", "exec", "fstat", \
+                               "chdir", "dup", "getpid", "sbrk", \
+                               "sleep", "uptime", "open", "write", \
+                               "mknod", "unlink", "link", "mkdir",  \
+                               "close", "trace"};
   int num;
   struct proc *p = myproc();
-  // const char *sysfunc_name[] = {"fork", "exit", "wait", "pipe", 
-  //                              "read", "kill", "exec", "fstat", 
-  //                              "chdir", "dup", "getpid", "sbrk", 
-  //                              "sleep", "uptime", "open", "write", 
-  //                              "mknod", "unlink", "link", "mkdir", 
-  //                              "close", "trace"};
+  int syscallret;
 
   num = p->trapframe->a7;
   if(num > 0 && num < NELEM(syscalls) && syscalls[num]) {
     p->trapframe->a0 = syscalls[num]();
-    p->processpid
+    // printf("pid %d call syscall %s\n", p->pid, sysfunc_name[num]);
+    if (p->mask){
+      // printf("[*]debug p->trapframe->a7:%d\n", p->trapframe->a7);
+      // printf("[*]debug p->mask:%d\n", p->mask);
+      // printf("[!]cal:%d\n", p->mask >> p->trapframe->a7);
+      if ((p->mask >> p->trapframe->a7) & 0x00000001) {
+        //syscall end
+        syscallret = p->trapframe->a0;
+        printf("%d: syscall %s -> %d\n", p->pid, sysfunc_name[num-1], syscallret);
+      }
+  }
   } else {
     printf("%d %s: unknown sys call %d\n",
             p->pid, p->name, num);
