@@ -34,12 +34,12 @@ procinit(void)
       // Allocate a page for the process's kernel stack.
       // Map it high in memory, followed by an invalid
       // guard page.
-      char *pa = kalloc();
-      if(pa == 0)
-        panic("kalloc");
-      uint64 va = KSTACK((int) (p - proc));
-      kvmmap(va, (uint64)pa, PGSIZE, PTE_R | PTE_W);
-      p->kstack = va;
+      // char *pa = kalloc();
+      // if(pa == 0)
+      //   panic("kalloc");
+      // uint64 va = KSTACK((int) (p - proc));
+      // kvmmap(va, (uint64)pa, PGSIZE, PTE_R | PTE_W);
+      // p->kstack = va;
   }
   kvminithart();
 }
@@ -105,8 +105,25 @@ allocproc(void)
   return 0;
 
 found:
-  p->pid = allocpid();
+    p->pid = allocpid();
+  // --------------------------------------------------------------
+// add kernel pagetable
+    p->kernel_pagetable = prockernelpg();
+    if (p->kernel_pagetable == 0) {
+      release(&p->lock);
+      return 0;
+    }
 
+    char *pa = kalloc();
+    if(pa == 0)
+      panic("kalloc");
+    uint64 va = KSTACK((int) (0));
+    printf("allproc va:%p\n", va);
+    ukvmmap(p->kernel_pagetable, va, (uint64)pa, PGSIZE, PTE_R | PTE_W);
+    // printvm(p->kernel_pagetable);
+    p->kstack = va;
+    // proc_kvminithart(p->kernel_pagetable);
+// --------------------------------------------------------------
   // Allocate a trapframe page.
   if((p->trapframe = (struct trapframe *)kalloc()) == 0){
     release(&p->lock);
@@ -141,6 +158,12 @@ freeproc(struct proc *p)
   p->trapframe = 0;
   if(p->pagetable)
     proc_freepagetable(p->pagetable, p->sz);
+  //--------------------
+  if(p->kernel_pagetable) {
+    // kfree(p->kernel_pagetable);
+  }
+  //--------------------
+  p->kernel_pagetable = 0;
   p->pagetable = 0;
   p->sz = 0;
   p->pid = 0;
@@ -468,24 +491,34 @@ scheduler(void)
     for(p = proc; p < &proc[NPROC]; p++) {
       acquire(&p->lock);
       if(p->state == RUNNABLE) {
+        
+        // kvminithart();
         // Switch to chosen process.  It is the process's job
         // to release its lock and then reacquire it
         // before jumping back to us.
+        // proc_kvminithart(p);
         p->state = RUNNING;
         c->proc = p;
         swtch(&c->context, &p->context);
-
+        proc_kvminithart(p->kernel_pagetable);
+        //---------------------------------------------------
+        // chage the kernel_table for user proc kernel table
+        //printvm(p->kernel_pagetable);
+        // kvminithart();
+        //---------------------------------------------------
+       
         // Process is done running for now.
         // It should have changed its p->state before coming back.
         c->proc = 0;
-
         found = 1;
+        
       }
       release(&p->lock);
     }
 #if !defined (LAB_FS)
     if(found == 0) {
       intr_on();
+      // kvminithart();
       asm volatile("wfi");
     }
 #else
