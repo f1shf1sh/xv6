@@ -164,7 +164,7 @@ freeproc(struct proc *p)
     proc_freepagetable(p->pagetable, p->sz);
   //--------------------
   if(p->kernel_pagetable) {
-    // printf("pid:%d free p->kernel_pagetable:%p\n", p->pid, p->kernel_pagetable);
+    printf("pid:%d free p->name:%s\n", p->pid, p->name);
     proc_free_kernel_pagetable(p->pagetable, p->kernel_pagetable, p->kstack, p->sz);
   }
   //--------------------
@@ -239,6 +239,7 @@ proc_free_kernel_pagetable(pagetable_t pagetable, pagetable_t proc_kernel_pageta
   ukvmunmap(proc_kernel_pagetable, kstack, 1, 0);
 
   // free the proc map in kernel_pagetable
+  printf("pagetable:%p, kernel_pagetalbe:%p\n", pagetable, proc_kernel_pagetable);
   uprocmap(pagetable, proc_kernel_pagetable, sz);
 
   // free proc_kernel_pagetable
@@ -292,15 +293,20 @@ growproc(int n)
   struct proc *p = myproc();
 
   sz = p->sz;
+  if (sz+n >= 0x2000000) {
+    return -1;
+  }
+
   if(n > 0){
     if((sz = uvmalloc(p->pagetable, sz, sz + n)) == 0) {
       return -1;
     }
+    uprocmap(p->pagetable, p->kernel_pagetable, p->sz);
   } else if(n < 0){
     sz = uvmdealloc(p->pagetable, sz, sz + n);
   }
   p->sz = sz;
-  printf("growproc pid:%d\n", p->pid);
+  printf("growproc pid:%d p->name:%s p->sz:%p\n", p->pid, p->name, p->sz);
   procmap(p->pagetable, p->kernel_pagetable, p->sz);
   return 0;
 }
@@ -325,19 +331,19 @@ fork(void)
     release(&np->lock);
     return -1;
   }
-  printf("pid:%d\n", p->pid);
-  // Copy kernel memory from parent to child
-  p->kernel_pagetable = kvmcopy(p->pagetable, p->sz);
-  if(p->kernel_pagetable <= 0) {
+
+  np->sz = p->sz;
+
+  //Copy kernel memory from parent to child
+  // printf("fork: pid:%d np->sz:%p np->kernel_pagetable:%p p->kernel_pagetable:%p\n", np->pid, np->sz, np->kernel_pagetable, p->kernel_pagetable);
+  if (np->kernel_pagetable == 0){
     freeproc(np);
     release(&np->lock);
     return -1;
   }
 
-  np->sz = p->sz;
-
+  procmap(np->pagetable, np->kernel_pagetable, np->sz);
   np->parent = p;
-
   // copy saved user registers.
   *(np->trapframe) = *(p->trapframe);
 
@@ -354,10 +360,14 @@ fork(void)
 
   pid = np->pid;
 
+  // kvminithart();
+  // proc_kvminithart(np->kernel_pagetable);
   np->state = RUNNABLE;
 
+  // proc_kvminithart(p->kernel_pagetable);
+  // kvminithart();
   release(&np->lock);
-
+  // proc_kvminithart(p->kernel_pagetable);
   return pid;
 }
 
@@ -524,11 +534,13 @@ scheduler(void)
   for(;;){
     // Avoid deadlock by ensuring that devices can interrupt.
     intr_on();
-    
+    // kvminithart();
     int found = 0;
     for(p = proc; p < &proc[NPROC]; p++) {
       acquire(&p->lock);
       if(p->state == RUNNABLE) {
+        proc_kvminithart(p->kernel_pagetable);
+        
         // proc_kvminithart(p->kernel_pagetable);
         // Switch to chosen process.  It is the process's job
         // to release its lock and then reacquire it
@@ -539,7 +551,6 @@ scheduler(void)
         //---------------------------------------------------
         // chage the kernel_table for user proc kernel table
         //printvm(p->kernel_pagetable);
-        proc_kvminithart(p->kernel_pagetable);
         swtch(&c->context, &p->context);
         //---------------------------------------------------
         
