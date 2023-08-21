@@ -91,6 +91,9 @@ void            exit(int);
 int             fork(void);
 int             growproc(int);
 pagetable_t     proc_pagetable(struct proc *);
+// lab3
+pagetable_t     proc_kernel_pagetable(struct proc *
+);
 void            proc_freepagetable(pagetable_t, uint64);
 int             kill(int);
 struct cpu*     mycpu(void);
@@ -109,7 +112,6 @@ int             either_copyout(int user_dst, uint64 dst, void *src, uint64 len);
 int             either_copyin(void *dst, int user_src, uint64 src, uint64 len);
 void            procdump(void);
 void            proc_free_kernel_pagetable(pagetable_t, pagetable_t, uint64, uint64);
-
 // swtch.S
 void            swtch(struct context*, struct context*);
 
@@ -179,14 +181,18 @@ uint64          walkaddr(pagetable_t, uint64);
 int             copyout(pagetable_t, uint64, char *, uint64);
 int             copyin(pagetable_t, char *, uint64, uint64);
 int             copyinstr(pagetable_t, char *, uint64, uint64);
+
+// prototype of function
 void            printvm(pagetable_t); // (pgtbl lab mark)
-void            prockernelpg(pagetable_t); // (lab mark)
-void            ukvmmap(pagetable_t, uint64, uint64, uint64, int);
-void            ukvmunmap(pagetable_t, uint64, uint64, uint64);
+void            kernel_map(pagetable_t); // (lab mark)
+void            proc_kvmmap(pagetable_t, uint64, uint64, uint64, int);
+void            proc_kvmunmap(pagetable_t, uint64, uint64, uint64);
 void            proc_kvminithart(pagetable_t);
 void            procmap(pagetable_t , pagetable_t , uint64);
 void            uprocmap(pagetable_t, pagetable_t, uint64);
 pagetable_t     kvmcopy(pagetable_t, uint64);
+uint64          kvmalloc(pagetable_t, pagetable_t, uint64, uint64);
+uint64          kvmdealloc(pagetable_t, uint64, uint64);
 
 // plic.c
 void            plicinit(void);

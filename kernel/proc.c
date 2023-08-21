@@ -108,26 +108,6 @@ allocproc(void)
 found:
     p->pid = allocpid();
 
-// --------------------------------------------------------------
-    // add kernel pagetable
-    pagetable_t proc_kernel_pagetable = (pagetable_t) kalloc();
-    memset(proc_kernel_pagetable, 0, PGSIZE);
-    if (proc_kernel_pagetable == 0) {
-      release(&p->lock);
-      return 0;
-    }
-    prockernelpg(proc_kernel_pagetable);
-    p->kernel_pagetable = proc_kernel_pagetable;
-    if (p->kernel_pagetable == 0) {
-      release(&p->lock);
-      return 0;
-    }
-    uint64 pa = kvmpa(p->kstack);
-    // printf("pid:%d -> pa:%p - kernel_pagetable:%p\n", p->pid, pa, p->kernel_pagetable);
-    // printf("p-sz:%p\n", p->sz);
-    ukvmmap(p->kernel_pagetable, p->kstack, (uint64)pa, PGSIZE, PTE_R | PTE_W);
-// --------------------------------------------------------------
-
   // Allocate a trapframe page.
   if((p->trapframe = (struct trapframe *)kalloc()) == 0){
     release(&p->lock);
@@ -142,6 +122,13 @@ found:
     return 0;
   }
 
+  p->kernel_pagetable = proc_kernel_pagetable(p); 
+  if(p->kernel_pagetable == 0) {
+    freeproc(p);
+    release(&p->lock);
+    return 0;
+  }
+  
   // Set up new context to start executing at forkret,
   // which returns to user space.
   memset(&p->context, 0, sizeof(p->context));
@@ -160,14 +147,14 @@ freeproc(struct proc *p)
   if(p->trapframe)
     kfree((void*)p->trapframe);
   p->trapframe = 0;
-  if(p->pagetable)
-    proc_freepagetable(p->pagetable, p->sz);
   //--------------------
   if(p->kernel_pagetable) {
-    printf("pid:%d free p->name:%s\n", p->pid, p->name);
     proc_free_kernel_pagetable(p->pagetable, p->kernel_pagetable, p->kstack, p->sz);
   }
   //--------------------
+  if(p->pagetable)
+    proc_freepagetable(p->pagetable, p->sz);
+
   p->kernel_pagetable = 0;
   p->pagetable = 0;
   p->sz = 0;
@@ -213,6 +200,23 @@ proc_pagetable(struct proc *p)
   return pagetable;
 }
 
+pagetable_t
+proc_kernel_pagetable(struct proc *p)
+{
+    pagetable_t kernel_pagetable;
+
+    kernel_pagetable = uvmcreate();
+    if(kernel_pagetable == 0)
+      return 0;
+    uint64 kstack = PGROUNDDOWN(p->kstack); 
+    uint64 pa = kvmpa(kstack);
+
+    proc_kvmmap(kernel_pagetable, kstack, (uint64)pa, PGSIZE, PTE_R | PTE_W );
+    kernel_map(kernel_pagetable);
+    
+    return kernel_pagetable;
+}
+
 // Free a process's page table, and free the
 // physical memory it refers to.
 void
@@ -224,26 +228,17 @@ proc_freepagetable(pagetable_t pagetable, uint64 sz)
 }
 
 void
-proc_free_kernel_pagetable(pagetable_t pagetable, pagetable_t proc_kernel_pagetable, uint64 kstack, uint64 sz) 
+proc_free_kernel_pagetable(pagetable_t pagetable, pagetable_t kernel_pagetable, uint64 kstack, uint64 sz) 
 {
-  // free kernel base map
-  ukvmunmap(proc_kernel_pagetable, UART0, 1, 0);
-  ukvmunmap(proc_kernel_pagetable, VIRTIO0, 1, 0);
-  // ukvmunmap(proc_kernel_pagetable, CLINT, 0x10000/PGSIZE, 0);
-  ukvmunmap(proc_kernel_pagetable, PLIC, 0x400000/PGSIZE, 0);
-  ukvmunmap(proc_kernel_pagetable, KERNBASE, ((uint64)etext-KERNBASE)/PGSIZE, 0);
-  ukvmunmap(proc_kernel_pagetable, (uint64)etext, (PHYSTOP-(uint64)etext)/PGSIZE, 0);
-  ukvmunmap(proc_kernel_pagetable, TRAMPOLINE, 1, 0);
-  
-  // free proc kernel stack map
-  ukvmunmap(proc_kernel_pagetable, kstack, 1, 0);
-
-  // free the proc map in kernel_pagetable
-  printf("pagetable:%p, kernel_pagetalbe:%p\n", pagetable, proc_kernel_pagetable);
-  uprocmap(pagetable, proc_kernel_pagetable, sz);
-
-  // free proc_kernel_pagetable
-  uvmfree(proc_kernel_pagetable, 0);
+  proc_kvmunmap(kernel_pagetable, UART0, 1, 0);
+  proc_kvmunmap(kernel_pagetable, VIRTIO0, 1, 0);
+  proc_kvmunmap(kernel_pagetable, PLIC, 0x400000/PGSIZE, 0);
+  proc_kvmunmap(kernel_pagetable, KERNBASE, ((uint64)etext-KERNBASE)/PGSIZE, 0);
+  proc_kvmunmap(kernel_pagetable, (uint64)etext, (PHYSTOP-(uint64)etext)/PGSIZE, 0);
+  proc_kvmunmap(kernel_pagetable, TRAMPOLINE, 1, 0);
+  proc_kvmunmap(kernel_pagetable, kstack, 1, 0);
+  uprocmap(pagetable, kernel_pagetable, sz);
+  uvmfree(kernel_pagetable, 0);
 } 
 
 // a user program that calls exec("/init")
@@ -289,11 +284,16 @@ userinit(void)
 int
 growproc(int n)
 {
-  uint sz;
+uint sz;
+  uint ksz;
   struct proc *p = myproc();
 
   sz = p->sz;
-  if (sz+n >= 0x2000000) {
+  ksz = p->sz;
+
+
+  if (sz+n >= 0xC000000) {
+    printf("sz:%p, n:%p, sz+n:%p\n", sz, n, sz+n);
     return -1;
   }
 
@@ -301,13 +301,18 @@ growproc(int n)
     if((sz = uvmalloc(p->pagetable, sz, sz + n)) == 0) {
       return -1;
     }
-    uprocmap(p->pagetable, p->kernel_pagetable, p->sz);
+
+    if (kvmalloc(p->kernel_pagetable, p->pagetable, ksz, ksz + n) == 0) {
+      return -1;
+    }
   } else if(n < 0){
+    ksz = kvmdealloc(p->kernel_pagetable, ksz, ksz + n);
     sz = uvmdealloc(p->pagetable, sz, sz + n);
+    if (ksz != sz) 
+      return -1;
+    
   }
   p->sz = sz;
-  printf("growproc pid:%d p->name:%s p->sz:%p\n", p->pid, p->name, p->sz);
-  procmap(p->pagetable, p->kernel_pagetable, p->sz);
   return 0;
 }
 
@@ -335,14 +340,8 @@ fork(void)
   np->sz = p->sz;
 
   //Copy kernel memory from parent to child
-  // printf("fork: pid:%d np->sz:%p np->kernel_pagetable:%p p->kernel_pagetable:%p\n", np->pid, np->sz, np->kernel_pagetable, p->kernel_pagetable);
-  if (np->kernel_pagetable == 0){
-    freeproc(np);
-    release(&np->lock);
-    return -1;
-  }
-
   procmap(np->pagetable, np->kernel_pagetable, np->sz);
+
   np->parent = p;
   // copy saved user registers.
   *(np->trapframe) = *(p->trapframe);
@@ -355,19 +354,11 @@ fork(void)
     if(p->ofile[i])
       np->ofile[i] = filedup(p->ofile[i]);
   np->cwd = idup(p->cwd);
-
   safestrcpy(np->name, p->name, sizeof(p->name));
-
   pid = np->pid;
-
-  // kvminithart();
-  // proc_kvminithart(np->kernel_pagetable);
   np->state = RUNNABLE;
-
-  // proc_kvminithart(p->kernel_pagetable);
-  // kvminithart();
   release(&np->lock);
-  // proc_kvminithart(p->kernel_pagetable);
+
   return pid;
 }
 
@@ -534,7 +525,7 @@ scheduler(void)
   for(;;){
     // Avoid deadlock by ensuring that devices can interrupt.
     intr_on();
-    // kvminithart();
+    kvminithart();
     int found = 0;
     for(p = proc; p < &proc[NPROC]; p++) {
       acquire(&p->lock);
