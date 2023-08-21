@@ -128,7 +128,7 @@ found:
     release(&p->lock);
     return 0;
   }
-  
+
   // Set up new context to start executing at forkret,
   // which returns to user space.
   memset(&p->context, 0, sizeof(p->context));
@@ -204,14 +204,16 @@ pagetable_t
 proc_kernel_pagetable(struct proc *p)
 {
     pagetable_t kernel_pagetable;
+    uint64 kstack;
+    uint64 pa;
 
     kernel_pagetable = uvmcreate();
     if(kernel_pagetable == 0)
       return 0;
-    uint64 kstack = PGROUNDDOWN(p->kstack); 
-    uint64 pa = kvmpa(kstack);
+    kstack = PGROUNDDOWN(p->kstack); 
+    pa = kvmpa(kstack);
 
-    proc_kvmmap(kernel_pagetable, kstack, (uint64)pa, PGSIZE, PTE_R | PTE_W );
+    proc_kvmmap(kernel_pagetable, kstack, pa, PGSIZE, PTE_R | PTE_W );
     kernel_map(kernel_pagetable);
     
     return kernel_pagetable;
@@ -525,26 +527,19 @@ scheduler(void)
   for(;;){
     // Avoid deadlock by ensuring that devices can interrupt.
     intr_on();
-    kvminithart();
+
     int found = 0;
     for(p = proc; p < &proc[NPROC]; p++) {
       acquire(&p->lock);
       if(p->state == RUNNABLE) {
-        proc_kvminithart(p->kernel_pagetable);
-        
-        // proc_kvminithart(p->kernel_pagetable);
         // Switch to chosen process.  It is the process's job
         // to release its lock and then reacquire it
         // before jumping back to us.
         p->state = RUNNING;
         c->proc = p;
-
-        //---------------------------------------------------
-        // chage the kernel_table for user proc kernel table
-        //printvm(p->kernel_pagetable);
+        proc_kvminithart(p->kernel_pagetable);
         swtch(&c->context, &p->context);
-        //---------------------------------------------------
-        
+        kvminithart();
         // Process is done running for now.
         // It should have changed its p->state before coming back.
         c->proc = 0;
@@ -555,7 +550,6 @@ scheduler(void)
 #if !defined (LAB_FS)
     if(found == 0) {
       intr_on();
-      kvminithart();
       asm volatile("wfi");
     }
 #else

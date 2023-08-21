@@ -506,7 +506,7 @@ kernel_map(pagetable_t kernel_pagetable)
   proc_kvmmap(kernel_pagetable, TRAMPOLINE, (uint64)trampoline, PGSIZE, PTE_R | PTE_X);
 }
 
-void 
+void
 proc_kvminithart(pagetable_t proc_kernel_pagetable)
 {
    w_satp(MAKE_SATP(proc_kernel_pagetable));

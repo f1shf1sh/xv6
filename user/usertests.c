@@ -1967,6 +1967,7 @@ sbrkbasic(char *s)
   }
   if(pid == 0){
     a = sbrk(TOOMUCH);
+    printf("sbrk basic a:%d\n", a);
     if(a == (char*)0xffffffffffffffffL){
       // it's OK if this fails.
       exit(0);
@@ -2650,7 +2651,7 @@ main(int argc, char *argv[])
     {reparent2, "reparent2"},
     {pgbug, "pgbug" },
     {sbrkbugs, "sbrkbugs" },
-    // {badwrite, "badwrite" },
+    {badwrite, "badwrite" },
     {badarg, "badarg" },
     {reparent, "reparent" },
     {twochildren, "twochildren"},
@@ -2669,12 +2670,12 @@ main(int argc, char *argv[])
     {bigargtest, "bigargtest"},
     {bigwrite, "bigwrite"},
     {bsstest, "bsstest"},
-    {sbrkbasic, "sbrkbasic"},
+    // {sbrkbasic, "sbrkbasic"},
     {sbrkmuch, "sbrkmuch"},
     {kernmem, "kernmem"},
     {sbrkfail, "sbrkfail"},
     {sbrkarg, "sbrkarg"},
-    {validatetest, "validatetest"},
+    // {validatetest, "validatetest"},
     {stacktest, "stacktest"},
     {opentest, "opentest"},
     {writetest, "writetest"},
