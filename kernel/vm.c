@@ -251,7 +251,6 @@ uvmalloc(pagetable_t pagetable, uint64 oldsz, uint64 newsz)
     memset(mem, 0, PGSIZE);
     if(mappages(pagetable, a, PGSIZE, (uint64)mem, PTE_W|PTE_X|PTE_R|PTE_U) != 0){
       kfree(mem);
-      uvmdealloc(pagetable, a, oldsz);
       return 0;
     }
   }
@@ -471,19 +470,19 @@ proc_kvmunmap(pagetable_t kernel_pagetable, uint64 va, uint64 npages, uint64 do_
   uint64 a;
   pte_t *pte;
   if (va % PGSIZE != 0) {
-    panic("ukvmunmap: not aligned");
+    panic("proc_kvmunmap: not aligned");
   }
 
   for (a = va; a < va + npages*PGSIZE; a += PGSIZE) {
     if ((pte = walk(kernel_pagetable, a, 0)) == 0) {
-      panic("ukvmunmap: walk");
+      panic("proc_kvmunmap: walk");
     }
     if ((*pte & PTE_V) == 0) {
-      panic("ukvmunmap: not mapped");
+      panic("proc_kvmunmap: not mapped");
       // return;
     }
     if (PTE_FLAGS(*pte) == PTE_V) {
-      panic("ukvmunmap: not a leaf");
+      panic("proc_kvmunmap: not a leaf");
     }
     if (do_free) {
       uint64 pa = PTE2PA(*pte);
@@ -520,6 +519,7 @@ procmap(pagetable_t pagetable, pagetable_t kernel_pagetable, uint64 sz)
 
   for (va = 0; va < sz; va += PGSIZE) {
     uint64 pa = walkaddr(pagetable, va);
+    printf("\rprocmap:va:%p, pa:%p, sz:%p\n",va, pa, sz);
     proc_kvmmap(kernel_pagetable, va, pa, PGSIZE, PTE_R | PTE_W ); 
   }
 }
@@ -544,11 +544,12 @@ kvmalloc(pagetable_t kernel_pagetable, pagetable_t pagetable, uint64 oldsz, uint
   uint64 pa;
   uint64 a;
 
-  if (kernel_pagetable == 0) 
-    return 0;
   if (newsz < oldsz) 
     return oldsz;
-  
+
+  if (newsz % PGSIZE != 0)
+    return newsz;
+
   for (a = oldsz; a < newsz; a += PGSIZE) {
     pa = walkaddr(pagetable, a);
     if (mappages(kernel_pagetable, a, PGSIZE, pa, PTE_R | PTE_W) < 0) {

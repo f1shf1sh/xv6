@@ -239,6 +239,8 @@ proc_free_kernel_pagetable(pagetable_t pagetable, pagetable_t kernel_pagetable, 
   proc_kvmunmap(kernel_pagetable, (uint64)etext, (PHYSTOP-(uint64)etext)/PGSIZE, 0);
   proc_kvmunmap(kernel_pagetable, TRAMPOLINE, 1, 0);
   proc_kvmunmap(kernel_pagetable, kstack, 1, 0);
+  // proc_segvmmap
+  // proc_segvmunmap
   uprocmap(pagetable, kernel_pagetable, sz);
   uvmfree(kernel_pagetable, 0);
 } 
@@ -267,6 +269,7 @@ userinit(void)
   // allocate one user page and copy init's instructions
   // and data into it.
   uvminit(p->pagetable, initcode, sizeof(initcode));
+
   p->sz = PGSIZE;
   
   // prepare for the very first "return" from kernel to user.
@@ -293,9 +296,7 @@ uint sz;
   sz = p->sz;
   ksz = p->sz;
 
-
   if (sz+n >= 0xC000000) {
-    printf("sz:%p, n:%p, sz+n:%p\n", sz, n, sz+n);
     return -1;
   }
 
