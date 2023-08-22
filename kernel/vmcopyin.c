@@ -49,6 +49,11 @@ copyinstr_new(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
   struct proc *p = myproc();
   char *s = (char *) srcva;
 
+  if (srcva == 0) {
+    printf("p->sz:%p, dst:%p, srcva:%p\n", p->sz, dst, srcva);
+    uint64 pa = walkaddr(p->pagetable, srcva);
+    printf("pa:%p\n", pa);
+  }
   stats.ncopyinstr++;   // XXX lock
   for(int i = 0; i < max && srcva + i < p->sz; i++){
     dst[i] = s[i];
