@@ -20,6 +20,7 @@ extern void forkret(void);
 static void wakeup1(struct proc *chan);
 static void freeproc(struct proc *p);
 
+extern char etext[];  // kernel.ld sets this to end of kernel code.
 extern char trampoline[]; // trampoline.S
 
 // initialize the proc table at boot time.
@@ -106,7 +107,7 @@ allocproc(void)
   return 0;
 
 found:
-  p->pid = allocpid();
+    p->pid = allocpid();
 
   // Allocate a trapframe page.
   if((p->trapframe = (struct trapframe *)kalloc()) == 0){
@@ -117,6 +118,13 @@ found:
   // An empty user page table.
   p->pagetable = proc_pagetable(p);
   if(p->pagetable == 0){
+    freeproc(p);
+    release(&p->lock);
+    return 0;
+  }
+
+  p->kernel_pagetable = proc_kernel_pagetable(p); 
+  if(p->kernel_pagetable == 0) {
     freeproc(p);
     release(&p->lock);
     return 0;
@@ -140,8 +148,15 @@ freeproc(struct proc *p)
   if(p->trapframe)
     kfree((void*)p->trapframe);
   p->trapframe = 0;
+  //--------------------
+  if(p->kernel_pagetable) {
+    proc_free_kernel_pagetable(p->pagetable, p->kernel_pagetable, p->kstack, p->sz);
+  }
+  //--------------------
   if(p->pagetable)
     proc_freepagetable(p->pagetable, p->sz);
+
+  p->kernel_pagetable = 0;
   p->pagetable = 0;
   p->sz = 0;
   p->pid = 0;
@@ -186,6 +201,25 @@ proc_pagetable(struct proc *p)
   return pagetable;
 }
 
+pagetable_t
+proc_kernel_pagetable(struct proc *p)
+{
+    pagetable_t kernel_pagetable;
+    uint64 kstack;
+    uint64 pa;
+
+    kernel_pagetable = uvmcreate();
+    if(kernel_pagetable == 0)
+      return 0;
+    kstack = PGROUNDDOWN(p->kstack); 
+    pa = kvmpa(kstack);
+
+    proc_kvmmap(kernel_pagetable, kstack, pa, PGSIZE, PTE_R | PTE_W );
+    kernel_map(kernel_pagetable);
+    
+    return kernel_pagetable;
+}
+
 // Free a process's page table, and free the
 // physical memory it refers to.
 void
@@ -195,6 +229,22 @@ proc_freepagetable(pagetable_t pagetable, uint64 sz)
   uvmunmap(pagetable, TRAPFRAME, 1, 0);
   uvmfree(pagetable, sz);
 }
+
+void
+proc_free_kernel_pagetable(pagetable_t pagetable, pagetable_t kernel_pagetable, uint64 kstack, uint64 sz) 
+{
+  proc_kvmunmap(kernel_pagetable, UART0, 1, 0);
+  proc_kvmunmap(kernel_pagetable, VIRTIO0, 1, 0);
+  proc_kvmunmap(kernel_pagetable, PLIC, 0x400000/PGSIZE, 0);
+  proc_kvmunmap(kernel_pagetable, KERNBASE, ((uint64)etext-KERNBASE)/PGSIZE, 0);
+  proc_kvmunmap(kernel_pagetable, (uint64)etext, (PHYSTOP-(uint64)etext)/PGSIZE, 0);
+  proc_kvmunmap(kernel_pagetable, TRAMPOLINE, 1, 0);
+  proc_kvmunmap(kernel_pagetable, kstack, 1, 0);
+  // proc_segvmmap
+  // proc_segvmunmap
+  uprocmap(pagetable, kernel_pagetable, sz);
+  uvmfree(kernel_pagetable, 0);
+} 
 
 // a user program that calls exec("/init")
 // od -t xC initcode
@@ -216,12 +266,13 @@ userinit(void)
 
   p = allocproc();
   initproc = p;
-  
+
   // allocate one user page and copy init's instructions
   // and data into it.
   uvminit(p->pagetable, initcode, sizeof(initcode));
-  p->sz = PGSIZE;
 
+  p->sz = PGSIZE;
+  
   // prepare for the very first "return" from kernel to user.
   p->trapframe->epc = 0;      // user program counter
   p->trapframe->sp = PGSIZE;  // user stack pointer
@@ -229,8 +280,8 @@ userinit(void)
   safestrcpy(p->name, "initcode", sizeof(p->name));
   p->cwd = namei("/");
 
+  procmap(p->pagetable, p->kernel_pagetable, p->sz);
   p->state = RUNNABLE;
-
   release(&p->lock);
 }
 
@@ -239,16 +290,31 @@ userinit(void)
 int
 growproc(int n)
 {
-  uint sz;
+uint sz;
+  uint ksz;
   struct proc *p = myproc();
 
   sz = p->sz;
+  ksz = p->sz;
+
+  if (sz+n >= 0xC000000) {
+    return -1;
+  }
+
   if(n > 0){
     if((sz = uvmalloc(p->pagetable, sz, sz + n)) == 0) {
       return -1;
     }
+
+    if (kvmalloc(p->kernel_pagetable, p->pagetable, ksz, ksz + n) == 0) {
+      return -1;
+    }
   } else if(n < 0){
+    ksz = kvmdealloc(p->kernel_pagetable, ksz, ksz + n);
     sz = uvmdealloc(p->pagetable, sz, sz + n);
+    if (ksz != sz) 
+      return -1;
+    
   }
   p->sz = sz;
   return 0;
@@ -279,8 +345,10 @@ fork(void)
 
   np->sz = p->sz;
 
-  np->parent = p;
+  //Copy kernel memory from parent to child
+  procmap(np->pagetable, np->kernel_pagetable, np->sz);
 
+  np->parent = p;
   // copy saved user registers.
   *(np->trapframe) = *(p->trapframe);
 
@@ -292,13 +360,9 @@ fork(void)
     if(p->ofile[i])
       np->ofile[i] = filedup(p->ofile[i]);
   np->cwd = idup(p->cwd);
-
   safestrcpy(np->name, p->name, sizeof(p->name));
-
   pid = np->pid;
-
   np->state = RUNNABLE;
-
   release(&np->lock);
 
   return pid;
@@ -467,7 +531,6 @@ scheduler(void)
   for(;;){
     // Avoid deadlock by ensuring that devices can interrupt.
     intr_on();
-    
     int found = 0;
     for(p = proc; p < &proc[NPROC]; p++) {
       acquire(&p->lock);
@@ -477,12 +540,12 @@ scheduler(void)
         // before jumping back to us.
         p->state = RUNNING;
         c->proc = p;
+        proc_kvminithart(p->kernel_pagetable);
         swtch(&c->context, &p->context);
-
+        kvminithart();
         // Process is done running for now.
         // It should have changed its p->state before coming back.
         c->proc = 0;
-
         found = 1;
       }
       release(&p->lock);

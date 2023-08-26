@@ -20,7 +20,7 @@ exec(char *path, char **argv)
   struct proghdr ph;
   pagetable_t pagetable = 0, oldpagetable;
   struct proc *p = myproc();
-
+  
   begin_op();
 
   if((ip = namei(path)) == 0){
@@ -49,6 +49,8 @@ exec(char *path, char **argv)
     if(ph.vaddr + ph.memsz < ph.vaddr)
       goto bad;
     uint64 sz1;
+    if (ph.vaddr + ph.memsz >= 0xC000000)
+      goto bad;
     if((sz1 = uvmalloc(pagetable, sz, ph.vaddr + ph.memsz)) == 0)
       goto bad;
     sz = sz1;
@@ -68,9 +70,12 @@ exec(char *path, char **argv)
   // Use the second as the user stack.
   sz = PGROUNDUP(sz);
   uint64 sz1;
+  if (sz + 2*PGSIZE >= 0xC000000)
+    goto bad;
   if((sz1 = uvmalloc(pagetable, sz, sz + 2*PGSIZE)) == 0)
     goto bad;
   sz = sz1;
+
   uvmclear(pagetable, sz-2*PGSIZE);
   sp = sz;
   stackbase = sp - PGSIZE;
@@ -114,13 +119,24 @@ exec(char *path, char **argv)
   p->sz = sz;
   p->trapframe->epc = elf.entry;  // initial program counter = main
   p->trapframe->sp = sp; // initial stack pointer
+  
+  
+  // printf("exec: pid:%d p->name:%s p->sz:%p\n", p->pid, p->name, p->sz);
+  uprocmap(oldpagetable, p->kernel_pagetable, oldsz);
+  procmap(p->pagetable, p->kernel_pagetable, p->sz);
+
   proc_freepagetable(oldpagetable, oldsz);
+
+  if (p->pid == 1) {
+    printvm(p->pagetable);
+  }
 
   return argc; // this ends up in a0, the first argument to main(argc, argv)
 
  bad:
   if(pagetable)
     proc_freepagetable(pagetable, sz);
+  
   if(ip){
     iunlockput(ip);
     end_op();
