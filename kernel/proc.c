@@ -5,6 +5,7 @@
 #include "spinlock.h"
 #include "proc.h"
 #include "defs.h"
+#include "sysinfo.h"
 
 struct cpu cpus[NCPU];
 
@@ -273,6 +274,9 @@ fork(void)
     release(&np->lock);
     return -1;
   }
+  //copy trace mask
+  np->mask = p->mask;
+
   np->sz = p->sz;
 
   np->parent = p;
@@ -692,4 +696,55 @@ procdump(void)
     printf("%d %s %s", p->pid, state, p->name);
     printf("\n");
   }
+}
+
+//syscall in kernel (syscall lab)
+int
+trace(int mask) 
+{
+  struct proc *p = myproc();
+  acquire(&p->lock);
+  p->mask = mask;
+  release(&p->lock);
+  return 0;
+}
+
+// count running proc (syscall lab)
+uint64 
+cnproc()
+{
+  int nproc = 0;
+  struct proc *p;
+
+  for(p = proc; p < &proc[NPROC]; p++){
+    acquire(&p->lock);
+    if (p->state != UNUSED) {
+      nproc += 1;
+      // if (p->parent) {
+      //   nproc += 1;
+      // }
+    }    
+    release(&p->lock);
+  }
+
+  return nproc;
+}
+
+
+int 
+sysinfo(uint64 addr)
+{
+  struct sysinfo info;
+  struct proc *p;
+  // uint64 nproc, freemem;
+
+  p = myproc();
+  info.nproc = cnproc();
+  info.freemem = cfreemem();
+
+  // printf("proc.c addr: %d\n", addr);
+  if (copyout(p->pagetable, addr, (char*)&info, 16) < 0) {
+    return -1;
+  }
+  return 0;
 }

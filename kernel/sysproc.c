@@ -95,3 +95,32 @@ sys_uptime(void)
   release(&tickslock);
   return xticks;
 }
+
+uint64
+sys_trace(void)
+{
+  int mask;
+
+  if(argint(0, &mask) < 0) {
+    return -1;
+  } 
+  return trace(mask);
+}
+
+uint64
+sys_sysinfo(void)
+{
+  uint64 addr; // pointer to struct sysinfo
+
+  if (argaddr(0, &addr) < 0) {
+    return -1;
+  }
+
+  // printf("addr:%p\n", addr);
+  if (addr >= MAXVA) {
+    return -1;
+  }
+  // printf("sysproc.c addr: %d\n", addr);
+
+  return sysinfo(addr);
+}
