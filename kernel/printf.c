@@ -132,3 +132,17 @@ printfinit(void)
   initlock(&pr.lock, "pr");
   pr.locking = 1;
 }
+
+void 
+backtrace(void)
+{
+  uint64 fp;
+  // get frame pointer
+  fp = r_fp();
+  printf("get fp:%p\n", fp);
+  //loop and ca prve stack
+
+  //computer top and bottom
+
+  return;
+}
