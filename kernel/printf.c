@@ -136,11 +136,21 @@ printfinit(void)
 void 
 backtrace(void)
 {
-  uint64 fp;
+  int* fp;
+  #define FLAG 0x0000003fffffffffL
+  #define STACKTOP  0x3fffffa000L
+  #define BASEADDR 0x8fffffffL
+
   // get frame pointer
-  fp = r_fp();
-  printf("get fp:%p\n", fp);
+  fp = (int *)r_fp();
+  printf("backtrace:\n");
+
   //loop and ca prve stack
+  while(PGROUNDUP((uint64)fp) == STACKTOP) {
+    uint64 ra = *((int*)((uint64)fp-8))&BASEADDR;
+    printf("%p\n", ra);
+    fp = (int*)(*(int*)((uint64)fp-0x10)&FLAG);
+  }
 
   //computer top and bottom
 
