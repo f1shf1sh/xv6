@@ -699,13 +699,15 @@ procdump(void)
 }
 
 int
-sigalarm(int ticks, void (*handler)()) {
-
+sigalarm(int ticks, void (*handler)()) 
+{
+  
   return 0;
 }
 
 int
-sigreturn(void) {
+sigreturn(void) 
+{
 
   return 0;
 }

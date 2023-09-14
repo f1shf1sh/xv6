@@ -101,15 +101,19 @@ uint64
 sys_sigalarm(void)
 {
   int n;
+  uint64 p;
+  typedef void(*handler)();
 
-  if(argint(0, &n) < 0)
+  if(argint(0, &n) < 0 || argaddr(1, &p) < 0)
     return -1;
-  return 0;
+
+
+  return sigalarm(n, (handler)p);
 }
 
 uint64
 sys_sigreturn(void)
 {
-
+  sigreturn()
   return 0;
 }
