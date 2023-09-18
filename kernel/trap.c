@@ -68,6 +68,7 @@ usertrap(void)
   } else if((which_dev = devintr()) != 0){
     // ok
   } else {
+    printf("scause:%p\n", r_scause());
     printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
     printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());
     p->killed = 1;
@@ -78,9 +79,18 @@ usertrap(void)
 
   // give up the CPU if this is a timer interrupt.
   if(which_dev == 2) {
+    if (p->ticks != 0) { 
+      p->trace_ticks += 1;
+      if (p->trace_ticks == p->ticks) {
+        intr_off();
+        p->trapframe->t2 = p->trapframe->epc;
+        p->trapframe->epc = (uint64)p->handler;
+        p->trace_ticks = 0;
+      }
+    }
     yield();
   }
-
+  
   usertrapret();
 }
 
@@ -151,8 +161,9 @@ kerneltrap()
   }
 
   // give up the CPU if this is a timer interrupt.
-  if(which_dev == 2 && myproc() != 0 && myproc()->state == RUNNING)
+  if(which_dev == 2 && myproc() != 0 && myproc()->state == RUNNING) {
     yield();
+  }
 
   // the yield() may have caused some traps to occur,
   // so restore trap registers for use by kernelvec.S's sepc instruction.

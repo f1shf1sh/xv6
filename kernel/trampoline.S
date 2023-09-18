@@ -29,16 +29,16 @@ uservec:
         csrrw a0, sscratch, a0
 
         # save the user registers in TRAPFRAME
-        sd ra, 40(a0)
-        sd sp, 48(a0)
-        sd gp, 56(a0)
-        sd tp, 64(a0)
-        sd t0, 72(a0)
-        sd t1, 80(a0)
-        sd t2, 88(a0)
-        sd s0, 96(a0)
-        sd s1, 104(a0)
-        sd a1, 120(a0)
+        sd ra, 40(a0) // 0x28
+        sd sp, 48(a0) // 0x30
+        sd gp, 56(a0) // 0x38
+        sd tp, 64(a0) // 0x40
+        sd t0, 72(a0) // 0x48
+        sd t1, 80(a0) // 0x50
+        sd t2, 88(a0) // 0x58
+        sd s0, 96(a0) // 0x60
+        sd s1, 104(a0) // 0x68
+        sd a1, 120(a0) // 0x78
         sd a2, 128(a0)
         sd a3, 136(a0)
         sd a4, 144(a0)
@@ -58,11 +58,11 @@ uservec:
         sd t3, 256(a0)
         sd t4, 264(a0)
         sd t5, 272(a0)
-        sd t6, 280(a0)
+        sd t6, 280(a0) // 0x118
 
 	# save the user a0 in p->trapframe->a0
         csrr t0, sscratch
-        sd t0, 112(a0)
+        sd t0, 112(a0) // 0x70
 
         # restore kernel stack pointer from p->trapframe->kernel_sp
         ld sp, 8(a0)

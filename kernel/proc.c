@@ -93,7 +93,7 @@ static struct proc*
 allocproc(void)
 {
   struct proc *p;
-
+ 
   for(p = proc; p < &proc[NPROC]; p++) {
     acquire(&p->lock);
     if(p->state == UNUSED) {
@@ -698,9 +698,18 @@ procdump(void)
   }
 }
 
+
+// just register a handler in kernel
 int
 sigalarm(int ticks, void (*handler)()) 
 {
+  struct proc *p = myproc();
+
+  acquire(&p->lock);
+  p->ticks = ticks;
+  p->trace_ticks = 0;
+  p->handler = handler;
+  release(&p->lock);
   
   return 0;
 }
@@ -708,6 +717,12 @@ sigalarm(int ticks, void (*handler)())
 int
 sigreturn(void) 
 {
+  struct proc *p = myproc();
 
+  printf("func sigreturn\n");
+
+  // acquire(&p->lock);
+  p->trapframe->epc = p->trapframe->t2;
+  // release(&p->lock);
   return 0;
 }

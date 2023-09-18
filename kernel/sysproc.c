@@ -106,14 +106,12 @@ sys_sigalarm(void)
 
   if(argint(0, &n) < 0 || argaddr(1, &p) < 0)
     return -1;
-
-
   return sigalarm(n, (handler)p);
 }
 
 uint64
 sys_sigreturn(void)
 {
-  sigreturn()
+  sigreturn();
   return 0;
 }

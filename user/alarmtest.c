@@ -22,6 +22,7 @@ int
 main(int argc, char *argv[])
 {
   test0();
+  printf("abc\n");
   test1();
   test2();
   exit(0);
