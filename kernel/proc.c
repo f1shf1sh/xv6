@@ -718,11 +718,9 @@ int
 sigreturn(void) 
 {
   struct proc *p = myproc();
-
-  printf("func sigreturn\n");
-
-  // acquire(&p->lock);
+  acquire(&p->lock);
+  //p->trapframe->sp += 0x10;
   p->trapframe->epc = p->trapframe->t2;
-  // release(&p->lock);
+  release(&p->lock);
   return 0;
 }

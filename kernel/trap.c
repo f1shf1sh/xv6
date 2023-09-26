@@ -37,7 +37,6 @@ void
 usertrap(void)
 {
   int which_dev = 0;
-
   if((r_sstatus() & SSTATUS_SPP) != 0)
     panic("usertrap: not from user mode");
 
@@ -49,7 +48,6 @@ usertrap(void)
   
   // save user program counter.
   p->trapframe->epc = r_sepc();
-  
   if(r_scause() == 8){
     // system call
 
@@ -79,18 +77,15 @@ usertrap(void)
 
   // give up the CPU if this is a timer interrupt.
   if(which_dev == 2) {
-    if (p->ticks != 0) { 
       p->trace_ticks += 1;
       if (p->trace_ticks == p->ticks) {
-        intr_off();
+        printf("trap(): p->sp:%p\n", p->trapframe->sp);
         p->trapframe->t2 = p->trapframe->epc;
         p->trapframe->epc = (uint64)p->handler;
         p->trace_ticks = 0;
-      }
     }
     yield();
   }
-  
   usertrapret();
 }
 
